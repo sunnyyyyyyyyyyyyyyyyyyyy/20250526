@@ -1,6 +1,5 @@
 let canvas;
 let video;
-let handDetector;
 let detections = [];
 
 let blocks = [];
@@ -73,8 +72,8 @@ function drawHand() {
   if (detections.length > 0) {
     let landmarks = detections[0];
 
-    let thumbTip = landmarks[4];     // 拇指指尖
-    let indexTip = landmarks[8];     // 食指指尖
+    let thumbTip = landmarks[4];
+    let indexTip = landmarks[8];
 
     let x1 = width - thumbTip.x * width;
     let y1 = thumbTip.y * height;
