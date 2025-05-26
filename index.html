@@ -1,27 +1,29 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
   <head>
     <meta charset="UTF-8" />
-    <title>教育科技積木遊戲</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <title>教育科技遊戲</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/addons/p5.dom.min.js"></script>
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
     <style>
       body {
+        margin: 0;
+        padding: 0;
         display: flex;
         justify-content: center;
         align-items: center;
         height: 100vh;
-        margin: 0;
-        background: #f0f0f0;
+        background: #fff5f0;
+        font-family: sans-serif;
       }
-      canvas {
-        display: block;
+      #game-container {
+        position: relative;
       }
     </style>
   </head>
   <body>
+    <div id="game-container"></div>
     <script src="sketch.js"></script>
   </body>
 </html>
