@@ -1,22 +1,21 @@
-let handpose;
+let canvas;
 let video;
-let predictions = [];
+let handDetector;
+let detections = [];
 
 let blocks = [];
 let caught = [];
 
 function setup() {
-  createCanvas(640, 480).parent(document.body);
+  canvas = createCanvas(640, 480);
+  canvas.parent(document.body);
+
   video = createCapture(VIDEO);
   video.size(width, height);
   video.hide();
 
-  handpose = ml5.handpose(video, modelReady);
-  handpose.on("predict", results => {
-    predictions = results;
-  });
+  setupHandTracking();
 
-  // 初始化四個積木
   let words = ["教", "育", "科", "技"];
   for (let i = 0; i < 4; i++) {
     blocks.push({
@@ -31,14 +30,9 @@ function setup() {
   rectMode(CENTER);
 }
 
-function modelReady() {
-  console.log("模型載入完成！");
-}
-
 function draw() {
   background(255);
 
-  // 鏡像鏡頭畫面（方便用手玩）
   push();
   translate(width, 0);
   scale(-1, 1);
@@ -49,7 +43,56 @@ function draw() {
   drawHand();
 }
 
+function setupHandTracking() {
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.8,
+    minTrackingConfidence: 0.5,
+  });
+
+  hands.onResults(results => {
+    detections = results.multiHandLandmarks;
+  });
+
+  const camera = new Camera(video.elt, {
+    onFrame: async () => {
+      await hands.send({ image: video.elt });
+    },
+    width: 640,
+    height: 480,
+  });
+  camera.start();
+}
+
+function drawHand() {
+  if (detections.length > 0) {
+    let landmarks = detections[0];
+
+    let thumbTip = landmarks[4];     // 拇指指尖
+    let indexTip = landmarks[8];     // 食指指尖
+
+    let x1 = width - thumbTip.x * width;
+    let y1 = thumbTip.y * height;
+    let x2 = width - indexTip.x * width;
+    let y2 = indexTip.y * height;
+
+    stroke(0, 255, 0);
+    strokeWeight(4);
+    line(x1, y1, x2, y2);
+
+    return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  }
+  return null;
+}
+
 function drawBlocks() {
+  let handPos = drawHand();
+
   for (let block of blocks) {
     if (!block.caught) {
       block.y += 2;
@@ -60,52 +103,17 @@ function drawBlocks() {
       textSize(24);
       text(block.text, block.x, block.y);
 
-      // 偵測碰撞（手指線）
-      if (predictions.length > 0) {
-        let hand = predictions[0];
-        let thumb = hand.annotations.thumb[3];
-        let index = hand.annotations.indexFinger[3];
-
-        let mx = (thumb[0] + index[0]) / 2;
-        let my = (thumb[1] + index[1]) / 2;
-
-        // 轉換鏡像位置
-        mx = width - mx;
-
-        // 碰撞檢查
-        if (
-          dist(mx, my, block.x, block.y) < 40
-        ) {
-          block.caught = true;
-          caught.push(block.text);
-        }
+      if (handPos && dist(handPos.x, handPos.y, block.x, block.y) < 40) {
+        block.caught = true;
+        caught.push(block.text);
       }
     }
   }
 
-  // 判斷是否成功接到所有積木
   if (caught.length === 4) {
     fill(0, 200, 0);
     textSize(32);
     text("挑戰成功！", width / 2, height / 2);
     noLoop();
-  }
-}
-
-function drawHand() {
-  if (predictions.length > 0) {
-    let hand = predictions[0];
-    let thumb = hand.annotations.thumb[3];
-    let index = hand.annotations.indexFinger[3];
-
-    // 鏡像轉換
-    let x1 = width - thumb[0];
-    let y1 = thumb[1];
-    let x2 = width - index[0];
-    let y2 = index[1];
-
-    stroke(0, 255, 0);
-    strokeWeight(4);
-    line(x1, y1, x2, y2);
   }
 }
