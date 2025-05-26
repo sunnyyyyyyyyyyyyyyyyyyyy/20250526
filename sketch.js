@@ -1,78 +1,89 @@
-let canvas;
+let handpose;
 let video;
 let detections = [];
 
 let blocks = [];
-let targetWords = ["教", "育", "科", "技"];
-let caughtWords = [];
-let timer = 30;
-let gameOver = false;
-let gameSuccess = false;
-let restartTimer = 0;
+let timer = 30; // 初始時間
 let lastBlockTime = 0;
+let gameState = "playing";
+let restartTime = 0;
+let collectedTargets = [];
+
+let targetWords = ["教", "育", "科", "技"];
+let blockTypes = ["target", "timePlus", "bomb"];
 
 function setup() {
-  canvas = createCanvas(640, 480);
-  canvas.parent(document.body);
-
+  createCanvas(640, 480).parent("game-container");
   video = createCapture(VIDEO);
   video.size(width, height);
   video.hide();
 
-  setupHandTracking();
+  handpose = ml5.handpose(video, modelReady);
+  handpose.on("predict", results => {
+    detections = results;
+  });
 
-  textAlign(CENTER, CENTER);
-  rectMode(CENTER);
+  setInterval(() => {
+    if (gameState === "playing") {
+      timer--;
+      if (timer <= 0) {
+        gameState = "ended";
+        restartTime = millis() + 5000;
+      }
+    }
+  }, 1000);
+}
+
+function modelReady() {
+  console.log("Model ready!");
 }
 
 function draw() {
-  background(255);
+  background("#fffaf0");
 
-  // 翻轉鏡頭畫面
+  // 鏡像影片
   push();
   translate(width, 0);
   scale(-1, 1);
   image(video, 0, 0, width, height);
   pop();
 
-  drawTimer();
-  if (!gameOver && !gameSuccess) {
+  let hand = drawHand();
+
+  if (gameState === "playing") {
+    if (millis() - lastBlockTime > 1000) {
+      spawnBlock();
+      lastBlockTime = millis();
+    }
+
+    updateBlocks();
     drawBlocks();
-    checkGameStatus();
-    spawnBlocks();
-  } else {
-    drawResult();
-    restartTimer--;
-    if (restartTimer <= 0) {
-      restartGame();
+
+    if (hand) {
+      checkCollisions(hand.x, hand.y);
+    }
+
+    drawTimer();
+    drawTargets();
+  } else if (gameState === "ended") {
+    fill(0);
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text("挑戰結束", width / 2, height / 2 - 20);
+
+    if (collectedTargets.length === 4) {
+      text("成功接住 教育科技！", width / 2, height / 2 + 20);
+    } else {
+      text("挑戰失敗，未集齊四字", width / 2, height / 2 + 20);
+    }
+
+    if (millis() > restartTime) {
+      timer = 30;
+      gameState = "playing";
+      blocks = [];
+      collectedTargets = [];
     }
   }
-}
-
-function setupHandTracking() {
-  const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-  });
-
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.8,
-    minTrackingConfidence: 0.5,
-  });
-
-  hands.onResults(results => {
-    detections = results.multiHandLandmarks;
-  });
-
-  const camera = new Camera(video.elt, {
-    onFrame: async () => {
-      await hands.send({ image: video.elt });
-    },
-    width: 640,
-    height: 480,
-  });
-  camera.start();
 }
 
 function drawHand() {
@@ -86,88 +97,112 @@ function drawHand() {
     let x2 = width - indexTip.x * width;
     let y2 = indexTip.y * height;
 
-    stroke(0, 255, 0);
+    // 黃色微笑曲線
+    noFill();
+    stroke("#FFD700");
     strokeWeight(4);
-    line(x1, y1, x2, y2);
+    beginShape();
+    curveVertex(x1 - 30, (y1 + y2) / 2 + 10);
+    curveVertex(x1, y1);
+    curveVertex((x1 + x2) / 2, (y1 + y2) / 2 + 20);
+    curveVertex(x2, y2);
+    curveVertex(x2 + 30, (y1 + y2) / 2 + 10);
+    endShape();
 
     return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
   }
   return null;
 }
 
-function spawnBlocks() {
-  if (millis() - lastBlockTime > 1000) {
-    lastBlockTime = millis();
+function spawnBlock() {
+  let type = random(blockTypes);
 
-    let r = random();
-    let newBlock = {
-      x: random(50, width - 50),
-      y: -40,
-      text: "",
-      type: "normal",
-      caught: false
-    };
+  let block = {
+    x: random(50, width - 50),
+    y: -50,
+    size: 50,
+    type: type,
+    speed: 3
+  };
 
-    if (r < 0.2) {
-      newBlock.text = "+5秒";
-      newBlock.type = "timePlus";
-      newBlock.value = 5;
-    } else if (r < 0.3) {
-      newBlock.text = "+10秒";
-      newBlock.type = "timePlus";
-      newBlock.value = 10;
-    } else if (r < 0.35) {
-      newBlock.text = "+15秒";
-      newBlock.type = "timePlus";
-      newBlock.value = 15;
-    } else if (r < 0.45) {
-      newBlock.text = "-3秒";
-      newBlock.type = "bomb";
-      newBlock.value = -3;
-    } else {
-      // 加入目標文字
-      newBlock.text = random(targetWords);
-      newBlock.type = "target";
-    }
-
-    blocks.push(newBlock);
+  if (type === "target") {
+    let unused = targetWords.filter(w => !collectedTargets.includes(w));
+    block.text = random(unused.length ? unused : targetWords);
+  } else if (type === "timePlus") {
+    block.text = "+" + int(random([5, 10, 15])) + "秒";
+  } else {
+    block.text = "-3秒";
   }
+
+  blocks.push(block);
+}
+
+function updateBlocks() {
+  for (let block of blocks) {
+    block.y += block.speed;
+  }
+  blocks = blocks.filter(block => block.y < height + 50);
 }
 
 function drawBlocks() {
-  let handPos = drawHand();
-
+  textAlign(CENTER, CENTER);
+  textSize(18);
   for (let block of blocks) {
-    if (block.caught) continue;
-
-    block.y += 2;
-
-    // 畫方塊
+    // 方塊顏色
     if (block.type === "bomb") {
       fill(255, 50, 50);
     } else if (block.type === "timePlus") {
       fill(100, 200, 255);
-    } else {
-      fill(200, 100, 100);
+    } else if (block.type === "target") {
+      switch (block.text) {
+        case "教":
+          fill("#b5838d");
+          break;
+        case "育":
+          fill("#e5989b");
+          break;
+        case "科":
+          fill("#ffb4a2");
+          break;
+        case "技":
+          fill("#ffcdb2");
+          break;
+        default:
+          fill(200, 100, 100);
+      }
     }
 
-    rect(block.x, block.y, 70, 40, 5);
-    fill(255);
-    textSize(20);
-    text(block.text, block.x, block.y);
+    stroke(255);
+    strokeWeight(2);
+    rect(block.x, block.y, block.size, block.size, 10); // 圓角
 
-    // 判斷是否碰到手
-    if (handPos && dist(handPos.x, handPos.y, block.x, block.y) < 40) {
-      block.caught = true;
+    fill(0);
+    noStroke();
+    text(block.text, block.x + block.size / 2, block.y + block.size / 2);
+  }
+}
 
-      if (block.type === "target" && !caughtWords.includes(block.text)) {
-        caughtWords.push(block.text);
+function checkCollisions(x, y) {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    let block = blocks[i];
+    let d = dist(x, y, block.x + block.size / 2, block.y + block.size / 2);
+    if (d < block.size / 2 + 10) {
+      if (block.type === "target") {
+        if (!collectedTargets.includes(block.text)) {
+          collectedTargets.push(block.text);
+        }
+        if (collectedTargets.length === 4) {
+          gameState = "ended";
+          restartTime = millis() + 5000;
+        }
       } else if (block.type === "timePlus") {
-        timer += block.value;
+        let seconds = int(block.text.replace("+", "").replace("秒", ""));
+        timer += seconds;
       } else if (block.type === "bomb") {
         timer -= 3;
         if (timer < 0) timer = 0;
       }
+      blocks.splice(i, 1);
     }
   }
 }
@@ -175,39 +210,21 @@ function drawBlocks() {
 function drawTimer() {
   fill(0);
   textSize(20);
-  text("時間：" + timer.toFixed(1) + " 秒", width / 2, 30);
+  textAlign(LEFT, TOP);
+  text("時間：" + timer + "秒", 10, 10);
+}
 
-  if (!gameOver && !gameSuccess) {
-    timer -= deltaTime / 1000;
-    if (timer <= 0) {
-      timer = 0;
-      gameOver = true;
-      restartTimer = 5 * 60;
+function drawTargets() {
+  fill(0);
+  textSize(16);
+  textAlign(LEFT, TOP);
+  let textStr = "已收集：";
+  for (let word of targetWords) {
+    if (collectedTargets.includes(word)) {
+      textStr += word + " ";
+    } else {
+      textStr += "_ ";
     }
   }
-}
-
-function checkGameStatus() {
-  if (targetWords.every(w => caughtWords.includes(w))) {
-    gameSuccess = true;
-    restartTimer = 5 * 60;
-  }
-}
-
-function drawResult() {
-  textSize(32);
-  fill(0);
-  if (gameSuccess) {
-    text("挑戰成功！", width / 2, height / 2);
-  } else {
-    text("時間到，挑戰失敗", width / 2, height / 2);
-  }
-}
-
-function restartGame() {
-  blocks = [];
-  caughtWords = [];
-  timer = 30;
-  gameOver = false;
-  gameSuccess = false;
+  text(textStr, 10, 40);
 }
