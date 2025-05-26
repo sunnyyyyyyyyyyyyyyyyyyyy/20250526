@@ -2,16 +2,6 @@ let handpose;
 let video;
 let detections = [];
 
-let blocks = [];
-let timer = 30; // 初始時間
-let lastBlockTime = 0;
-let gameState = "playing";
-let restartTime = 0;
-let collectedTargets = [];
-
-let targetWords = ["教", "育", "科", "技"];
-let blockTypes = ["target", "timePlus", "bomb"];
-
 function setup() {
   createCanvas(640, 480).parent("game-container");
   video = createCapture(VIDEO);
@@ -22,16 +12,6 @@ function setup() {
   handpose.on("predict", results => {
     detections = results;
   });
-
-  setInterval(() => {
-    if (gameState === "playing") {
-      timer--;
-      if (timer <= 0) {
-        gameState = "ended";
-        restartTime = millis() + 5000;
-      }
-    }
-  }, 1000);
 }
 
 function modelReady() {
@@ -39,7 +19,7 @@ function modelReady() {
 }
 
 function draw() {
-  background("#fffaf0");
+  background(220);
 
   // 鏡像影片
   push();
@@ -48,16 +28,18 @@ function draw() {
   image(video, 0, 0, width, height);
   pop();
 
-  let hand = drawHand();
+  if (detections.length > 0) {
+    // 只畫第一隻手的食指指尖
+    let landmarks = detections[0];
+    let indexTip = landmarks[8];
+    let x = width - indexTip.x * width;
+    let y = indexTip.y * height;
 
-  if (gameState === "playing") {
-    if (millis() - lastBlockTime > 1000) {
-      spawnBlock();
-      lastBlockTime = millis();
-    }
-
-    updateBlocks();
-    drawBlocks();
+    fill("yellow");
+    noStroke();
+    ellipse(x, y, 20, 20);
+  }
+}
 
     if (hand) {
       checkCollisions(hand.x, hand.y);
