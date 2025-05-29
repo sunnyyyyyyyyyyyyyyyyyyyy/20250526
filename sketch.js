@@ -2,31 +2,29 @@ let handpose;
 let video;
 let detections = [];
 
-let timer = 30;
-let gameState = "start"; // 新增 start 狀態
+let gameState = "playing";
 let blocks = [];
-let blockTypes = ["target", "timePlus", "bomb"];
-let targetWords = ["教", "育", "科", "技"];
 let collectedTargets = [];
+let timer = 30;
 let restartTime = 0;
 
-let modelReadyFlag = false;
+let blockTypes = ["target", "bomb", "timePlus"];
+let targetWords = ["教", "育", "科", "技"];
 
 function setup() {
   createCanvas(640, 480).parent("game-container");
-  frameRate(30);
-
   video = createCapture(VIDEO);
   video.size(width, height);
   video.hide();
 
-  handpose = ml5.handpose(video, () => {
-    console.log("Model ready!");
-    modelReadyFlag = true;
-  });
+  handpose = ml5.handpose(video, modelReady);
   handpose.on("predict", results => {
     detections = results;
   });
+}
+
+function modelReady() {
+  console.log("Model ready!");
 }
 
 function draw() {
@@ -39,39 +37,16 @@ function draw() {
   image(video, 0, 0, width, height);
   pop();
 
-  if (!modelReadyFlag) {
-    // 模型尚未準備好時顯示載入中
-    fill(0);
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    text("模型載入中...", width / 2, height / 2);
-    return;
-  }
-
-  if (gameState === "start") {
-    drawStartScreen();
-    return;
-  }
+  let hand = drawHand(); // 繪製手部圖案，並取得座標
 
   if (gameState === "playing") {
-    let hand = drawHand();
-    if (frameCount % 60 === 0) {
-      timer--;
-      if (timer <= 0) {
-        timer = 0;
-        gameState = "ended";
-        restartTime = millis() + 5000;
-      } else {
-        spawnBlock();
-      }
-    }
+    updateBlocks();
+    drawBlocks();
 
     if (hand) {
       checkCollisions(hand.x, hand.y);
     }
 
-    updateBlocks();
-    drawBlocks();
     drawTimer();
     drawTargets();
   } else if (gameState === "ended") {
@@ -88,40 +63,23 @@ function draw() {
 
     if (millis() > restartTime) {
       timer = 30;
-      gameState = "start"; // 返回開始畫面
+      gameState = "playing";
       blocks = [];
       collectedTargets = [];
     }
   }
 }
 
-function mousePressed() {
-  if (gameState === "start") {
-    gameState = "playing";
-  }
-}
-
-function drawStartScreen() {
-  fill(255);
-  rect(0, 0, width, height);
-  fill(0);
-  textAlign(CENTER, CENTER);
-  textSize(36);
-  text("教育科技挑戰遊戲", width / 2, height / 2 - 40);
-  textSize(24);
-  text("點擊畫面開始遊戲", width / 2, height / 2 + 20);
-}
-
 function drawHand() {
-  if (detections.length > 0 && detections[0].landmarks) {
+  if (detections.length > 0) {
     let landmarks = detections[0].landmarks;
     let thumbTip = landmarks[4];
     let indexTip = landmarks[8];
 
-    let x1 = width - thumbTip[0] * width;
-    let y1 = thumbTip[1] * height;
-    let x2 = width - indexTip[0] * width;
-    let y2 = indexTip[1] * height;
+    let x1 = width - thumbTip[0];
+    let y1 = thumbTip[1];
+    let x2 = width - indexTip[0];
+    let y2 = indexTip[1];
 
     // 黃色微笑曲線
     noFill();
@@ -164,9 +122,20 @@ function spawnBlock() {
 }
 
 function updateBlocks() {
+  if (frameCount % 60 === 0) {
+    spawnBlock();
+    timer--;
+    if (timer <= 0) {
+      timer = 0;
+      gameState = "ended";
+      restartTime = millis() + 5000;
+    }
+  }
+
   for (let block of blocks) {
     block.y += block.speed;
   }
+
   blocks = blocks.filter(block => block.y < height + 50);
 }
 
@@ -174,6 +143,7 @@ function drawBlocks() {
   textAlign(CENTER, CENTER);
   textSize(18);
   for (let block of blocks) {
+    // 方塊顏色
     if (block.type === "bomb") {
       fill(255, 50, 50);
     } else if (block.type === "timePlus") {
@@ -199,4 +169,57 @@ function drawBlocks() {
 
     stroke(255);
     strokeWeight(2);
-    rect(block.x, block.y, block.size, block.size, 10);
+    rect(block.x, block.y, block.size, block.size, 10); // 圓角
+
+    fill(0);
+    noStroke();
+    text(block.text, block.x + block.size / 2, block.y + block.size / 2);
+  }
+}
+
+function checkCollisions(x, y) {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    let block = blocks[i];
+    let d = dist(x, y, block.x + block.size / 2, block.y + block.size / 2);
+    if (d < block.size / 2 + 10) {
+      if (block.type === "target") {
+        if (!collectedTargets.includes(block.text)) {
+          collectedTargets.push(block.text);
+        }
+        if (collectedTargets.length === 4) {
+          gameState = "ended";
+          restartTime = millis() + 5000;
+        }
+      } else if (block.type === "timePlus") {
+        let seconds = int(block.text.replace("+", "").replace("秒", ""));
+        timer += seconds;
+      } else if (block.type === "bomb") {
+        timer -= 3;
+        if (timer < 0) timer = 0;
+      }
+      blocks.splice(i, 1);
+    }
+  }
+}
+
+function drawTimer() {
+  fill(0);
+  textSize(20);
+  textAlign(LEFT, TOP);
+  text("時間：" + timer + "秒", 10, 10);
+}
+
+function drawTargets() {
+  fill(0);
+  textSize(16);
+  textAlign(LEFT, TOP);
+  let textStr = "已收集：";
+  for (let word of targetWords) {
+    if (collectedTargets.includes(word)) {
+      textStr += word + " ";
+    } else {
+      textStr += "_ ";
+    }
+  }
+  text(textStr, 10, 40);
+}
