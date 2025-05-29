@@ -10,20 +10,23 @@ let targetWords = ["教", "育", "科", "技"];
 let collectedTargets = [];
 let restartTime = 0;
 
+let modelReadyFlag = false;
+
 function setup() {
   createCanvas(640, 480).parent("game-container");
+  frameRate(30);
+
   video = createCapture(VIDEO);
   video.size(width, height);
   video.hide();
 
-  handpose = ml5.handpose(video, modelReady);
+  handpose = ml5.handpose(video, () => {
+    console.log("Model ready!");
+    modelReadyFlag = true;
+  });
   handpose.on("predict", results => {
     detections = results;
   });
-}
-
-function modelReady() {
-  console.log("Model ready!");
 }
 
 function draw() {
@@ -35,6 +38,15 @@ function draw() {
   scale(-1, 1);
   image(video, 0, 0, width, height);
   pop();
+
+  if (!modelReadyFlag) {
+    // 模型尚未準備好時顯示載入中
+    fill(0);
+    textAlign(CENTER, CENTER);
+    textSize(32);
+    text("模型載入中...", width / 2, height / 2);
+    return;
+  }
 
   if (gameState === "start") {
     drawStartScreen();
@@ -101,15 +113,15 @@ function drawStartScreen() {
 }
 
 function drawHand() {
-  if (detections.length > 0) {
-    let landmarks = detections[0];
+  if (detections.length > 0 && detections[0].landmarks) {
+    let landmarks = detections[0].landmarks;
     let thumbTip = landmarks[4];
     let indexTip = landmarks[8];
 
-    let x1 = width - thumbTip.x * width;
-    let y1 = thumbTip.y * height;
-    let x2 = width - indexTip.x * width;
-    let y2 = indexTip.y * height;
+    let x1 = width - thumbTip[0] * width;
+    let y1 = thumbTip[1] * height;
+    let x2 = width - indexTip[0] * width;
+    let y2 = indexTip[1] * height;
 
     // 黃色微笑曲線
     noFill();
@@ -188,56 +200,3 @@ function drawBlocks() {
     stroke(255);
     strokeWeight(2);
     rect(block.x, block.y, block.size, block.size, 10);
-
-    fill(0);
-    noStroke();
-    text(block.text, block.x + block.size / 2, block.y + block.size / 2);
-  }
-}
-
-function checkCollisions(x, y) {
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    let block = blocks[i];
-    let d = dist(x, y, block.x + block.size / 2, block.y + block.size / 2);
-    if (d < block.size / 2 + 10) {
-      if (block.type === "target") {
-        if (!collectedTargets.includes(block.text)) {
-          collectedTargets.push(block.text);
-        }
-        if (collectedTargets.length === 4) {
-          gameState = "ended";
-          restartTime = millis() + 5000;
-        }
-      } else if (block.type === "timePlus") {
-        let seconds = int(block.text.replace("+", "").replace("秒", ""));
-        timer += seconds;
-      } else if (block.type === "bomb") {
-        timer -= 3;
-        if (timer < 0) timer = 0;
-      }
-      blocks.splice(i, 1);
-    }
-  }
-}
-
-function drawTimer() {
-  fill(0);
-  textSize(20);
-  textAlign(LEFT, TOP);
-  text("時間：" + timer + "秒", 10, 10);
-}
-
-function drawTargets() {
-  fill(0);
-  textSize(16);
-  textAlign(LEFT, TOP);
-  let textStr = "已收集：";
-  for (let word of targetWords) {
-    if (collectedTargets.includes(word)) {
-      textStr += word + " ";
-    } else {
-      textStr += "_ ";
-    }
-  }
-  text(textStr, 10, 40);
-}
