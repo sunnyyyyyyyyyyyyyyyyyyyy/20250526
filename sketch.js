@@ -2,6 +2,15 @@ let handpose;
 let video;
 let detections = [];
 
+let gameState = "playing";
+let blocks = [];
+let collectedTargets = [];
+let timer = 30;
+let restartTime = 0;
+
+let blockTypes = ["target", "bomb", "timePlus"];
+let targetWords = ["教", "育", "科", "技"];
+
 function setup() {
   createCanvas(640, 480).parent("game-container");
   video = createCapture(VIDEO);
@@ -28,18 +37,11 @@ function draw() {
   image(video, 0, 0, width, height);
   pop();
 
-  if (detections.length > 0) {
-    // 只畫第一隻手的食指指尖
-    let landmarks = detections[0];
-    let indexTip = landmarks[8];
-    let x = width - indexTip.x * width;
-    let y = indexTip.y * height;
+  let hand = drawHand(); // 繪製手部圖案，並取得座標
 
-    fill("yellow");
-    noStroke();
-    ellipse(x, y, 20, 20);
-  }
-}
+  if (gameState === "playing") {
+    updateBlocks();
+    drawBlocks();
 
     if (hand) {
       checkCollisions(hand.x, hand.y);
@@ -70,14 +72,14 @@ function draw() {
 
 function drawHand() {
   if (detections.length > 0) {
-    let landmarks = detections[0];
+    let landmarks = detections[0].landmarks;
     let thumbTip = landmarks[4];
     let indexTip = landmarks[8];
 
-    let x1 = width - thumbTip.x * width;
-    let y1 = thumbTip.y * height;
-    let x2 = width - indexTip.x * width;
-    let y2 = indexTip.y * height;
+    let x1 = width - thumbTip[0];
+    let y1 = thumbTip[1];
+    let x2 = width - indexTip[0];
+    let y2 = indexTip[1];
 
     // 黃色微笑曲線
     noFill();
@@ -120,9 +122,20 @@ function spawnBlock() {
 }
 
 function updateBlocks() {
+  if (frameCount % 60 === 0) {
+    spawnBlock();
+    timer--;
+    if (timer <= 0) {
+      timer = 0;
+      gameState = "ended";
+      restartTime = millis() + 5000;
+    }
+  }
+
   for (let block of blocks) {
     block.y += block.speed;
   }
+
   blocks = blocks.filter(block => block.y < height + 50);
 }
 
