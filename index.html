@@ -3,8 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <title>教育科技遊戲</title>
+
+    <!-- 引入 p5.js 與 ml5.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
+
     <style>
       body {
         margin: 0;
@@ -16,13 +19,28 @@
         background: #fff5f0;
         font-family: sans-serif;
       }
+
       #game-container {
         position: relative;
+        width: 640px;
+        height: 480px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      canvas {
+        display: block;
+        border-radius: 12px;
       }
     </style>
   </head>
+
   <body>
     <div id="game-container"></div>
+
+    <!-- 遊戲主程式 -->
     <script src="sketch.js"></script>
   </body>
 </html>
